@@ -1,0 +1,15 @@
+{
+  "$comment": "Skill -> public gallery URL. A gallery URL cannot be derived: `publicSlug` is allocated once, on a skill's first publish, and never re-derived, so it is a fact to record afterwards rather than compute in advance. `null` means not published yet. Flip `status` to \"published\" once the gallery is seeded — that turns every remaining null into a lint failure so these placeholders cannot outlive the reason for them.",
+  "status": "pending",
+  "links": {
+    "changeset-writer": null,
+    "dependency-upgrade-auditor": null,
+    "doc-drift-detector": null,
+    "error-triage": null,
+    "flaky-test-finder": null,
+    "pr-self-review": null,
+    "regression-risk-mapper": null,
+    "repo-onboarding-map": null,
+    "test-gap-finder": null
+  }
+}

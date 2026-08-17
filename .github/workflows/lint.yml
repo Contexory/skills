@@ -1,0 +1,48 @@
+name: Lint
+
+# Every pull request, and every push to `main`. The pack's whole claim is that it
+# is tested, so the gate that proves it runs on everything that lands. Note it is
+# not literally every push: a feature-branch push with no PR open runs nothing,
+# which is deliberate — the PR is where the check has somewhere to report.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # No `npm install` step, and no lockfile in the repository: the linter is
+      # zero-dependency `node:` builtins. Nothing to audit, nothing to pin,
+      # nothing that can break this job by publishing a new version.
+
+      # Each step below is ONE command on ONE line, deliberately. Upstream, a
+      # test reads these `run:` lines out of this file and executes them against
+      # the assembled tree — so the check that guards this workflow cannot be a
+      # weaker version of it. That is not hypothetical: the guard once ran
+      # `node --test` without the coverage flags, and dead code sailed through
+      # it into a red first CI run. Keep every step a single extractable command.
+
+      - name: Unit-test the linter
+        # The linter is the thing asserting the skills are well-formed, so it
+        # gets asserted first — including its own coverage. The tests that
+        # matter most are the `allowed-tools` ones: a token's scope may contain
+        # a space (`Bash(pnpm test:*)`), and a linter that split the field on
+        # whitespace would fail every correct skill in this pack.
+        run: node --test --experimental-test-coverage --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test-coverage-exclude='**/*.test.mjs' --test-coverage-exclude='**/*-cli.mjs' 'tools/**/*.test.mjs'
+
+      - name: Lint every SKILL.md
+        run: node tools/lint-cli.mjs .
+
+      - name: Syntax-check every skill script
+        run: bash tools/check-scripts.sh
