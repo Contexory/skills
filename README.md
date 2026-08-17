@@ -49,15 +49,61 @@ figure in this README.
 
 ## Install
 
-Each skill directory is self-contained. Copy the one you want:
+```bash
+npx skills add Contexory/skills
+```
+
+That is the [`skills` CLI](https://github.com/vercel-labs/skills) — the one
+[skills.sh](https://skills.sh) documents, and the line
+[vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) and
+[gitshot](https://github.com/vipulgupta2048/gitshot) publish for their own
+skills. It clones this repository, finds all nine, and asks which you want;
+inside an agent session it skips the question and takes all nine. To pick one
+either way:
 
 ```bash
-# just for you
-cp -R developer-workflow/error-triage ~/.claude/skills/error-triage
-
-# or for everyone working in one repository
-cp -R developer-workflow/error-triage /path/to/your/repo/.claude/skills/error-triage
+npx skills add Contexory/skills --skill error-triage
 ```
+
+To take several, repeat the flag —
+`--skill error-triage --skill pr-self-review`. `--skill '*'` takes all nine.
+
+Run inside a repository it installs to `<repo>/.agents/skills/<name>` and
+symlinks that into `<repo>/.claude/skills/<name>`, with a `skills-lock.json` at
+the repository root — **commit or ignore the two directories together**, because
+the bytes are in `.agents/` and a teammate who gets only `.claude/` clones a
+dangling symlink. `--global` does the same under your home directory, and prints
+a `✗ … does not support global skill installation` line for each agent that has
+no global location; it exits 0 all the same. Claude Code is one of several agents
+the CLI installs for — `--agent` picks one, and skills.sh lists what it supports.
+
+**Checked against this repository, not assumed.** On 2026-08-17, with
+`skills@1.5.22`: all nine are discovered even though they sit a level down under
+`developer-workflow/` rather than at the root; one skill can be taken rather than
+the whole pack; each arrives whole — `SKILL.md`, its `README.md`, and its
+`scripts/` directory beside them; and the destinations are the ones written
+above, symlink included. Nesting is the thing most worth checking, because a
+directory layout is exactly what a discovery rule can quietly not reach.
+
+### Or copy the directory
+
+The fallback with no third-party tool in the chain. Each skill directory is
+self-contained:
+
+```bash
+git clone https://github.com/Contexory/skills.git
+mkdir -p ~/.claude/skills
+cp -R skills/developer-workflow/error-triage ~/.claude/skills/error-triage
+```
+
+The `mkdir` is not padding: `cp` creates no intermediate directories, and
+`~/.claude/skills` does not exist until something puts a skill there — so on the
+machine of the person most likely to be reading this, the copy fails without it.
+Point the destination at `<your-repo>/.claude/skills/<name>` instead to install
+for one repository rather than for yourself. A copied skill is a plain directory
+with nothing pointing at it, so there is no second location to keep in step.
+
+### Either way
 
 Take one, take three, take all nine — **no skill in this pack references
 another**, so nothing breaks when you install a subset.
@@ -65,7 +111,7 @@ another**, so nothing breaks when you install a subset.
 Skill bodies name their script as `<skill-dir>/scripts/…`, where `<skill-dir>`
 is wherever you installed it. That is deliberate: a skill runs with *your
 project* as its working directory, so a relative `python3 scripts/x.py` would
-resolve to nothing.
+resolve to nothing — and [CI fails a skill that writes one](#the-three-rules-about-a-skills-script).
 
 The Python scripts need `python3` and nothing else — no packages to install. The
 skills detect the surrounding ecosystem and degrade rather than fail outside
@@ -77,6 +123,25 @@ Nothing here measures whether a skill's *output* is good. What was measured is
 triggering — whether the right skill fires — which is a different question from
 whether it then does useful work, and we have published no evidence on the
 second one. See [The evidence, and where it is](#the-evidence-and-where-it-is).
+
+## Not the Contexory plugin
+
+Two different things, and the difference is what each one does after you install
+it. **This repository is nine fixed skills.** You install them, the copies are
+yours, and they change when you install again.
+
+The [Contexory](https://contexory.com) plugin for Claude Code is not these nine
+at all — it syncs *your own* workspace's skills into Claude Code and keeps them
+current as your team publishes new versions:
+
+```
+/plugin marketplace add https://www.contexory.com/claude/marketplace.json
+/plugin install contexory@contexory
+```
+
+It manages its own directory rather than `~/.claude/skills`, so it neither
+installs these nine nor disturbs them if you have. Nothing in this repository
+requires it, and installing it does not get you this pack.
 
 ## Layout
 
@@ -114,13 +179,66 @@ builtins only, no lockfile, nothing to audit. It fails on:
 
 | | |
 | :--- | :--- |
-| **Frontmatter** | missing `name` or `description`; a `name` that does not match its directory; a description over 1024 characters or stating no triggering condition |
+| **Frontmatter** | missing `name` or `description`; a `name` that does not match its directory; a description over 1024 characters |
 | **`allowed-tools`** | a malformed token; no token whose scope contains a space |
-| **Files** | no `scripts/` file; an `assets/` file present |
+| **Files** | no `scripts/` file; no `README.md`; a `README.md` whose first heading names a different skill; an `assets/` file present |
+| **The body** | it runs no `<skill-dir>/scripts/…` file; it runs one that is not there; it writes a script path relatively |
 | **Layout** | a skill sitting at the repository root instead of inside a pack |
+| **This page** | a skill this README links nowhere, or a link into a pack that points at no skill |
 | **Gallery links** | a skill with no entry in `gallery-links.json`, an entry for a skill that does not exist, or a malformed URL |
 | **Scripts** | a Python or shell script that does not parse |
 | **The linter itself** | its own test suite below 100% line, branch or function coverage |
+
+**Nothing there counts anything.** There is no rule that this repository holds
+nine skills, or that a pack holds any particular number: a second pack is meant
+to be additive, and a pinned count is a line whoever adds one has to edit. The
+rules are stated per skill instead — carry your own README, run your own script,
+and appear in [the table at the top of this page](#the-nine). That last one is
+the count problem in the only form a linter can check, and it puts a contributor
+in the paragraph where a stale "Nine skills…" is sitting.
+
+### The three rules about a skill's script
+
+They are one rule really: **the script is the skill's mechanical half, so the
+body has to run it.**
+
+```
+python3 <skill-dir>/scripts/trace_map.py -     # what a body writes
+python3 scripts/trace_map.py -                 # CI fails this
+```
+
+The second one is not a style preference. A skill runs with **your project** as
+its working directory, not its own install directory, so a relative path looks
+for the script in your repository and does not find it. The rule fires only on a
+path that is one of the skill's own files — a body may perfectly well talk about
+`scripts/deploy.sh` in *your* repo, which is prose about your project rather than
+a broken reference to ours.
+
+The other two are what a syntax check cannot see: a script no instruction ever
+runs (it parses fine, and does nothing), and a body still naming a script that
+was renamed (the script that remains parses fine too).
+
+### What CI warns about, without failing
+
+One rule, and it is a warning on purpose:
+
+| | |
+| :--- | :--- |
+| `description-no-trigger` | the description contains none of `use this skill`, `when the user`, `for tasks involving`, `use when` |
+
+That is a **literal substring list**, printed on every run and never a build
+failure. The four phrases are written out here because the check cannot do what
+its name claims: "Use this when a stack trace is pasted" states its trigger
+exactly and matches none of them. Contexory's own validator returns this at
+`warning` for the same reason, and this repository's linter is bound to that
+severity by a test rather than deciding for itself.
+
+It stays *visible* because triggering is the pack's whole subject — but if you
+read the warning, look at your description and conclude it already says when to
+fire, the warning is the thing that is wrong. **Do not paste one of the four
+phrases in to silence it.** That optimizes the description for a substring check
+instead of for the dispatcher, which is precisely the failure this pack was built
+to measure.
 
 ### The `allowed-tools` line deserves its own paragraph
 
@@ -165,12 +283,15 @@ is where these cases are authored and where they are re-run whenever a
 description changes. It sits in the private workspace that owns these skills.
 
 **There is no public route to it, and we are not claiming there will be one.**
-In particular, publishing a skill to the Contexory gallery would not expose it:
+In particular, publishing a skill to the Contexory gallery does not expose it:
 the gallery serves the skill — its body and its supporting files — and not the
 workspace around it. Test cases are not readable by an anonymous visitor there,
-by design and at the database level. So the `gallery-links.json` entries in this
-repository, once they resolve, will link **the skill**, and each skill's README
-says exactly that. None of them promises the evidence.
+by design and at the database level. The nine skills **are** published to the
+gallery now, and the `gallery-links.json` entries in this repository resolve —
+so this is no longer a prediction about what a link would show, but a statement
+about pages you can open. Each one links **the skill**, and each skill's README
+says exactly that. None of them promises the evidence, and opening one confirms
+it: what is there is the skill body and its scripts.
 
 That leaves the numbers below resting on our word, which is worth saying in
 those terms rather than dressing up. They are published because withholding a
@@ -305,8 +426,9 @@ Two separate things, and neither is done:
   cases can arrive here as an export alongside the skills — generated, not
   hand-kept, so it cannot disagree with the runs it describes.
 - **A public read path.** Test cases are not exposed to anonymous visitors by
-  the gallery, so publishing these skills there does not make the evidence
-  readable. That is a deliberate boundary — publishing a skill exposes the
+  the gallery, so publishing these skills there did not make the evidence
+  readable — and they *are* published now, so that is an observation rather than
+  a forecast. That is a deliberate boundary — publishing a skill exposes the
   skill, not the workspace around it — so opening it is a decision somebody has
   to take on purpose, not a step that happens on the way to something else.
 

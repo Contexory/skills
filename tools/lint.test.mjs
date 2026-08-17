@@ -10,12 +10,13 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
 import {
+  TRIGGER_PHRASES,
   allowedToolsFrom,
   lintGalleryLinks,
   lintPack,
@@ -37,15 +38,31 @@ allowed-tools: Read Grep Bash(git log:*) Bash(python3:*)
 
 # Error triage
 
-Body.
+Run the mapper on the trace:
+
+\`\`\`
+python3 <skill-dir>/scripts/trace_map.py -
+\`\`\`
 `;
+
+/** The one line of the body that runs the skill's script. */
+const RUNS_THE_SCRIPT = "python3 <skill-dir>/scripts/trace_map.py -";
+
+/**
+ * The README GitHub renders when someone opens the skill's directory.
+ *
+ * Generated at assembly upstream, checked in by anyone opening a pull request
+ * here — which is exactly why the lint owns it rather than the generator.
+ */
+const GOOD_SKILL_README = "# `error-triage`\n\nLocates the cause of a runtime error.\n";
 
 /** A skill that lints clean, with per-test overrides. */
 function skill(overrides = {}) {
   return {
     dir: "error-triage",
     skillMd: GOOD_SKILL_MD,
-    files: ["SKILL.md", "scripts/trace_map.py"],
+    readme: GOOD_SKILL_README,
+    files: ["README.md", "SKILL.md", "scripts/trace_map.py"],
     ...overrides,
   };
 }
@@ -60,6 +77,32 @@ function reframe(from, to) {
 }
 
 const codes = (problems) => problems.map((p) => p.code).sort();
+
+// ── the README's copy of the phrase list ──────────────────────────────────
+
+describe("the trigger phrases the README advertises", () => {
+  it("are exactly the ones the linter checks for", () => {
+    // `description-no-trigger` is a warning precisely because the whitelist
+    // cannot make the judgement its name implies — so the README prints the four
+    // phrases, on the argument that a rule a contributor cannot check before
+    // pushing is one they discover from a build. That makes the row a *second
+    // statement* of `TRIGGER_PHRASES` with nothing holding the two together,
+    // which is the same shape as every bug this file exists for. Add a fifth
+    // phrase to the linter and the page advertises four; this is what fails.
+    //
+    // Read relative to this file rather than the working directory, so it holds
+    // both here and in the monorepo the repository is assembled from.
+    const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+    const row = readme.split("\n").find((line) => line.includes("`description-no-trigger`"));
+    assert.ok(row, "no README row documents description-no-trigger");
+
+    // Backticked items after "none of", so the rule's own name in the first
+    // column is not mistaken for a phrase. Order included: the row reads as a
+    // list, and a reordered list is a list someone edited without looking here.
+    const listed = [...row.slice(row.indexOf("none of")).matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+    assert.deepEqual(listed, TRIGGER_PHRASES);
+  });
+});
 
 // ── parseAllowedTools ─────────────────────────────────────────────────────
 
@@ -410,11 +453,36 @@ describe("lintSkill", () => {
     assert.ok(codes(problems).includes("description-too-long"));
   });
 
-  it("fails a description with no triggering phrase", () => {
+  it("warns — rather than fails — a description with no triggering phrase", () => {
+    // `TRIGGER_PHRASES` is a four-substring whitelist, and the product's own
+    // `validateSkill` returns this issue at severity `warning`. "Use this when a
+    // stack trace is pasted" contains none of the four while reading perfectly
+    // and naming its trigger exactly, so a build failure here would red-build a
+    // description the product accepts — and the fix a contributor would reach
+    // for is to paste one of the four phrases in, which makes the description
+    // worse at the only job this pack claims to measure.
     const problems = lintSkill(
       skill({ skillMd: reframe("description:", "description: Triages errors.") }),
     );
-    assert.ok(codes(problems).includes("description-no-trigger"));
+    const issue = problems.find((p) => p.code === "description-no-trigger");
+    assert.ok(issue);
+    assert.equal(issue.severity, "warning");
+    // And the phrase list is in the message, because the README documents it as
+    // a literal list: a rule a contributor cannot predict is one they discover
+    // from a red build.
+    assert.match(issue.message, /use when/);
+  });
+
+  it("does not warn on the phrasing the whitelist does recognize", () => {
+    assert.deepEqual(lintSkill(skill()), []);
+  });
+
+  it("marks every other problem as an error", () => {
+    // The severity field is not decoration: `runCli` exits on the errors alone,
+    // so a rule that forgot to declare itself would stop failing the build.
+    const problems = lintSkill(skill({ files: ["README.md", "SKILL.md"] }));
+    assert.deepEqual(codes(problems), ["scripts-missing"]);
+    assert.equal(problems[0].severity, "error");
   });
 
   it("passes a skill whose allowed-tools is a sequence", () => {
@@ -469,11 +537,119 @@ describe("lintSkill", () => {
 
   it("fails a skill with an assets/ file", () => {
     const problems = lintSkill(
-      skill({ files: ["SKILL.md", "scripts/trace_map.py", "assets/diagram.png"] }),
+      skill({ files: ["README.md", "SKILL.md", "scripts/trace_map.py", "assets/diagram.png"] }),
     );
     assert.deepEqual(codes(problems), ["assets-present"]);
   });
+});
 
+// ── the skill's own README ────────────────────────────────────────────────
+
+describe("the directory README", () => {
+  it("fails a skill that ships without one", () => {
+    // It is the page a reader from a ranking site opens — GitHub renders it when
+    // someone opens the directory, before they have seen the repository root.
+    const problems = lintSkill(skill({ readme: null, files: ["SKILL.md", "scripts/trace_map.py"] }));
+    assert.deepEqual(codes(problems), ["readme-missing"]);
+  });
+
+  it("fails a README copied from a sibling skill", () => {
+    // The failure mode that actually happens: a contributor copies the nearest
+    // skill's directory as a starting point and edits the SKILL.md. The README
+    // then advertises — and gives the install command for — a different skill,
+    // on the page a stranger lands on.
+    const problems = lintSkill(skill({ readme: "# `pr-self-review`\n\nReviews a diff.\n" }));
+    assert.deepEqual(codes(problems), ["readme-not-about-skill"]);
+  });
+
+  it("fails a README with no heading at all", () => {
+    const problems = lintSkill(skill({ readme: "Some prose about error-triage.\n" }));
+    assert.deepEqual(codes(problems), ["readme-not-about-skill"]);
+  });
+
+  it("accepts a heading that names the skill among other words", () => {
+    assert.deepEqual(lintSkill(skill({ readme: "# The `error-triage` skill\n\nBody.\n" })), []);
+  });
+});
+
+// ── the body's script references ──────────────────────────────────────────
+
+describe("the body's script references", () => {
+  it("fails a skill whose body never names its script", () => {
+    // The junk-skill hole: a directory with a one-line script nothing invokes
+    // passed all three CI steps. A script the prose never runs is not the
+    // mechanical half of a skill, it is a file in a directory.
+    const problems = lintSkill(
+      skill({ skillMd: GOOD_SKILL_MD.replace(RUNS_THE_SCRIPT, "read the trace") }),
+    );
+    assert.deepEqual(codes(problems), ["script-unreferenced"]);
+  });
+
+  it("fails a body naming a script that is not there", () => {
+    // The rename that leaves the body pointing at nothing. `check-scripts.sh`
+    // cannot see it: the script it parses is the one that still exists.
+    const problems = lintSkill(
+      skill({ skillMd: GOOD_SKILL_MD.replace("trace_map.py", "mapper.py") }),
+    );
+    const missing = problems.find((p) => p.code === "script-not-found");
+    assert.ok(missing);
+    assert.match(missing.message, /mapper\.py/);
+    // Reported once, not once per mention.
+    assert.equal(problems.filter((p) => p.code === "script-not-found").length, 1);
+  });
+
+  it("fails a bare `scripts/…` path, which resolves to nothing at run time", () => {
+    // A skill runs with the *user's project* as its working directory, so a
+    // relative `python3 scripts/x.py` looks for a script in their repository.
+    // The README states this; nothing checked it.
+    const problems = lintSkill({
+      ...skill(),
+      skillMd: GOOD_SKILL_MD.replace("<skill-dir>/scripts/", "scripts/"),
+    });
+    assert.deepEqual(codes(problems), ["script-path-relative", "script-unreferenced"]);
+  });
+
+  it("reports a path written correctly once and relatively once", () => {
+    // The realistic version of the relative-path bug: the code fence is right
+    // and a later sentence is not. Reporting only the first mention would call
+    // the skill clean while one of its two instructions runs nothing.
+    const problems = lintSkill({
+      ...skill(),
+      skillMd: `${GOOD_SKILL_MD}\nRe-run scripts/trace_map.py afterwards.\n`,
+    });
+    assert.deepEqual(codes(problems), ["script-path-relative"]);
+  });
+
+  it("says nothing about a bare path that is not one of the skill's own files", () => {
+    // "look in your repo's scripts/deploy.sh" is prose about the user's project,
+    // not a broken reference — the rule keys off the skill's own file list.
+    const problems = lintSkill({
+      ...skill(),
+      skillMd: `${GOOD_SKILL_MD}\nCheck the project's own scripts/deploy.sh too.\n`,
+    });
+    assert.deepEqual(problems, []);
+  });
+
+  it("accepts a nested helper the body does not name", () => {
+    // `scripts/lib/util.py` is imported by the script the body runs. Requiring
+    // every file to appear in prose would red-build a legitimate layout.
+    const problems = lintSkill(
+      skill({ files: ["README.md", "SKILL.md", "scripts/trace_map.py", "scripts/lib/util.py"] }),
+    );
+    assert.deepEqual(problems, []);
+  });
+
+  it("checks nothing about references when there is no script to reference", () => {
+    // One cause, one message: a skill with no `scripts/` file is reported as
+    // that, not as three consequences of it.
+    const problems = lintSkill(
+      skill({
+        skillMd: GOOD_SKILL_MD.replace(RUNS_THE_SCRIPT, "read the trace"),
+        files: ["README.md", "SKILL.md"],
+      }),
+    );
+    assert.deepEqual(codes(problems), ["scripts-missing"]);
+  });
 });
 
 // ── lintPack + runCli (the filesystem half) ───────────────────────────────
@@ -498,9 +674,19 @@ after(() => {
 
 const LINKS_PENDING = JSON.stringify({ status: "pending", links: { "error-triage": null } });
 
+/** The repository's front page, which has to list every skill it holds. */
+const REPO_README = `# A pack
+
+| Skill | What it does |
+| :--- | :--- |
+| [\`error-triage\`](./developer-workflow/error-triage) | Finds the frame that owns a failure |
+`;
+
 /** A repository holding one pack of one skill. Skills live at <pack>/<skill>/. */
 const GOOD_TREE = {
+  "README.md": REPO_README,
   "gallery-links.json": LINKS_PENDING,
+  "developer-workflow/error-triage/README.md": GOOD_SKILL_README,
   "developer-workflow/error-triage/SKILL.md": GOOD_SKILL_MD,
   "developer-workflow/error-triage/scripts/trace_map.py": "print(1)\n",
 };
@@ -524,6 +710,57 @@ describe("lintPack", () => {
     assert.deepEqual(codes(lintPack(root)), ["gallery-link-orphan", "pack-empty"]);
   });
 
+  it("fails a repository with no README at all", () => {
+    const root = fixtureTree({
+      "gallery-links.json": LINKS_PENDING,
+      "developer-workflow/error-triage/README.md": GOOD_SKILL_README,
+      "developer-workflow/error-triage/SKILL.md": GOOD_SKILL_MD,
+      "developer-workflow/error-triage/scripts/trace_map.py": "print(1)\n",
+    });
+    assert.deepEqual(codes(lintPack(root)), ["repo-readme-missing"]);
+  });
+
+  it("fails a skill the repository README does not link", () => {
+    // The other half of the count problem, stated per skill instead of as a
+    // number: a skill nobody listed is a skill nobody finds, and the moment a
+    // contributor has to add the row is the moment the prose around it — "Nine
+    // skills…", the results table — is in front of them.
+    const root = fixtureTree({ ...GOOD_TREE, "README.md": "# A pack\n\nNothing linked.\n" });
+    assert.deepEqual(codes(lintPack(root)), ["readme-skill-unlisted"]);
+  });
+
+  it("fails a README link to a skill that is not there", () => {
+    // A skill removed without touching the README leaves a 404 on the front
+    // page. Only Markdown link targets are read, so prose naming a path is not
+    // mistaken for a claim that it exists.
+    const root = fixtureTree({
+      ...GOOD_TREE,
+      "README.md": `${REPO_README}| [\`ghost\`](./developer-workflow/ghost) | Gone |\n`,
+    });
+    const problems = lintPack(root);
+    assert.deepEqual(codes(problems), ["readme-link-dead"]);
+    assert.match(problems[0].message, /ghost/);
+  });
+
+  it("declares a severity on every problem it can produce", () => {
+    // `runCli` decides the exit code from this field, so a rule that forgot to
+    // set it would stop failing the build the day the default changed. Asserted
+    // over a tree that trips as many rules at once as one tree can.
+    const root = fixtureTree({
+      "gallery-links.json": "{ not json",
+      "stray-skill/SKILL.md": GOOD_SKILL_MD,
+      "developer-workflow/error-triage/SKILL.md": GOOD_SKILL_MD.replace(
+        /^description:.*$/m,
+        "description: Triages errors.",
+      ),
+    });
+    const problems = lintPack(root);
+    assert.ok(problems.length > 4);
+    for (const problem of problems) {
+      assert.ok(["error", "warning"].includes(problem.severity), `${problem.code}: ${problem.severity}`);
+    }
+  });
+
   it("fails a skill sitting at the repository root instead of inside a pack", () => {
     // The layout mistake that would force a URL-breaking reorganization later:
     // every skill's public path has to stay <pack>/<skill> so a second pack is
@@ -537,7 +774,12 @@ describe("lintPack", () => {
   it("names a broken skill by its pack-qualified path", () => {
     const root = fixtureTree({
       ...GOOD_TREE,
-      "developer-workflow/doc-drift-detector/SKILL.md": GOOD_SKILL_MD,
+      "README.md": `${REPO_README}| [\`doc-drift-detector\`](./developer-workflow/doc-drift-detector) | Reads a doc |\n`,
+      "developer-workflow/doc-drift-detector/README.md": "# `doc-drift-detector`\n",
+      "developer-workflow/doc-drift-detector/SKILL.md": GOOD_SKILL_MD.replace(
+        "trace_map.py",
+        "x.py",
+      ),
       "developer-workflow/doc-drift-detector/scripts/x.py": "",
     });
     const problems = lintPack(root);
@@ -567,11 +809,16 @@ describe("lintPack", () => {
   it("lints two packs side by side", () => {
     const root = fixtureTree({
       ...GOOD_TREE,
+      "README.md": `${REPO_README}| [\`other-skill\`](./second-pack/other-skill) | Something else |\n`,
       "gallery-links.json": JSON.stringify({
         status: "pending",
         links: { "error-triage": null, "other-skill": null },
       }),
-      "second-pack/other-skill/SKILL.md": reframe("name:", "name: other-skill"),
+      "second-pack/other-skill/README.md": "# `other-skill`\n",
+      "second-pack/other-skill/SKILL.md": reframe("name:", "name: other-skill").replace(
+        "trace_map.py",
+        "x.py",
+      ),
       "second-pack/other-skill/scripts/x.py": "",
     });
     assert.deepEqual(lintPack(root), []);
@@ -709,6 +956,31 @@ describe("runCli", () => {
     const out = [];
     const code = runCli({ argv: [], cwd: fixtureTree(GOOD_TREE), log: (m) => out.push(m) });
     assert.equal(code, 0);
+  });
+
+  it("prints a warning and still exits 0", () => {
+    // The `description-no-trigger` decision, at the level a contributor meets
+    // it: the rule is a substring whitelist, so it advises rather than gates —
+    // but it is printed on every run, because a warning nobody sees is a rule
+    // that has been deleted with extra steps.
+    const out = [];
+    const err = [];
+    const root = fixtureTree({
+      ...GOOD_TREE,
+      "developer-workflow/error-triage/SKILL.md": GOOD_SKILL_MD.replace(
+        /^description:.*$/m,
+        "description: Triages a runtime failure.",
+      ),
+    });
+    const code = runCli({
+      argv: [root],
+      cwd: "/nowhere",
+      log: (m) => out.push(m),
+      error: (m) => err.push(m),
+    });
+    assert.equal(code, 0);
+    assert.match(err.join("\n"), /description-no-trigger/);
+    assert.match(out.join("\n"), /1 warning/);
   });
 
   it("prints every problem and exits 1", () => {

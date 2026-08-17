@@ -62,7 +62,19 @@ const SKILL_NAME_MAX = 64;
  */
 const RESERVED_NAMES = ["anthropic", "claude"];
 const DESCRIPTION_MAX = 1024;
-const TRIGGER_PHRASES = ["use this skill", "when the user", "for tasks involving", "use when"];
+
+/**
+ * The whitelist `description-no-trigger` warns on the absence of.
+ *
+ * **Exported because the README writes it out**, and the argument for printing
+ * it publicly is that a contributor cannot check a semantic rule before pushing
+ * — which makes that table row a load-bearing predictor of a red-ish build. A
+ * second statement of a list nothing compares is the shape of every bug this
+ * file's header is about, so `lint.test.mjs` reads the row and requires it to be
+ * exactly this array. Add a fifth phrase here and the page that promised to be
+ * checkable goes stale silently; the test is what stops that.
+ */
+export const TRIGGER_PHRASES = ["use this skill", "when the user", "for tasks involving", "use when"];
 
 /** Split an `allowed-tools` value into its tokens. */
 export function parseAllowedTools(raw) {
@@ -387,15 +399,53 @@ function unquote(value) {
 // ── The rules ─────────────────────────────────────────────────────────────
 
 /**
+ * Every `scripts/…` path a skill body names, with whether it was written the
+ * way a skill body has to write one.
+ *
+ * A skill runs with the *user's project* as its working directory, not its own
+ * install directory, so `python3 scripts/x.py` in a body looks for a script in
+ * their repository and finds nothing. The pack convention — stated in the
+ * README — is that a body names its script by full path, `<skill-dir>/scripts/…`,
+ * and the leading group here is what tells the two apart.
+ */
+const SCRIPT_REF_RE = /(<skill-dir>\/)?scripts\/[A-Za-z0-9_.\-/]+/g;
+
+/**
+ * Read a body's script references, deduplicated by path.
+ *
+ * Each path carries **both** flags rather than one verdict, because a body may
+ * name the same script both ways — a correct code fence and a later sentence
+ * that forgot the prefix. Collapsing that to a single "is it qualified?" makes
+ * one of the two true statements about it disappear: keep the good mention and
+ * the skill reads as never invoking anything, keep the bad one and it reads as
+ * clean.
+ */
+function scriptReferences(body) {
+  const seen = new Map();
+  for (const match of body.matchAll(SCRIPT_REF_RE)) {
+    // `[./]+$` strips a sentence's full stop or a trailing slash without
+    // touching an extension: `.py` ends in `y`.
+    const path = match[0].replace(/^<skill-dir>\//, "").replace(/[./]+$/, "");
+    const reference = seen.get(path) ?? { path, qualified: false, relative: false };
+    if (match[1]) reference.qualified = true;
+    else reference.relative = true;
+    seen.set(path, reference);
+  }
+  return [...seen.values()];
+}
+
+/**
  * Lint one skill from its already-read contents.
  *
- * Pure: `files` is the list of POSIX-relative paths inside the skill directory.
+ * Pure: `files` is the list of POSIX-relative paths inside the skill directory,
+ * and `readme` is the directory's own `README.md` (`null` when it has none).
  * Keeping the filesystem out of here is what lets every rule be tested without
  * a fixture tree on disk.
  */
-export function lintSkill({ dir, skillMd, files }) {
+export function lintSkill({ dir, skillMd, readme, files }) {
   const problems = [];
-  const add = (code, message) => problems.push({ dir, code, message });
+  const add = (code, message, severity = "error") =>
+    problems.push({ dir, code, message, severity });
 
   const parsed = parseFrontmatter(skillMd);
   if (!parsed.ok) {
@@ -436,9 +486,25 @@ export function lintSkill({ dir, skillMd, files }) {
     }
     const lower = description.toLowerCase();
     if (!TRIGGER_PHRASES.some((phrase) => lower.includes(phrase))) {
+      // A WARNING, deliberately, and the one rule here that is not a build
+      // failure. `TRIGGER_PHRASES` is a four-substring whitelist standing in for
+      // a judgement it cannot make: "Use this when a stack trace is pasted"
+      // contains none of the four and names its trigger exactly. Contexory's own
+      // `validateSkill` returns this issue at `warning`, so failing the build on
+      // it would red-build a description the product accepts — and the repair a
+      // contributor would reach for is to paste a phrase from the list in, which
+      // makes the description worse at the only thing this pack measures.
+      //
+      // The list is named in the message rather than left implicit, because the
+      // README describes the rule semantically and a contributor cannot check a
+      // semantic rule before pushing.
       add(
         "description-no-trigger",
-        `Description states no triggering condition (e.g. "Use when …"), so the skill will under-fire.`,
+        "Description contains none of the phrases this check looks for " +
+          `(${TRIGGER_PHRASES.map((phrase) => `"${phrase}"`).join(", ")}), so it may state no ` +
+          "triggering condition and the skill will under-fire. A substring check cannot tell — " +
+          "if the description already says when to fire, this is noise.",
+        "warning",
       );
     }
   }
@@ -471,9 +537,66 @@ export function lintSkill({ dir, skillMd, files }) {
     }
   }
 
+  // ── the directory README ──
+  //
+  // GitHub renders it when someone opens the skill's directory, which is where a
+  // reader arriving from a skill-ranking site lands — before the repository
+  // root, and often instead of it. Upstream the file is generated at assembly;
+  // that guarantee covers the skills this pack publishes and nothing a
+  // contributor adds by pull request, which is the path this lint exists for.
+  if (readme == null) {
+    add(
+      "readme-missing",
+      "No `README.md`. It is the page GitHub shows when someone opens this directory.",
+    );
+  } else {
+    // Named rather than merely present: the way a skill directory gets made is
+    // by copying the nearest one, and a README left advertising its source
+    // gives a stranger another skill's name and another skill's install line.
+    const heading = readme.match(/^#[ \t]+(.+)$/m);
+    if (!heading?.[1].includes(dir)) {
+      add(
+        "readme-not-about-skill",
+        `README.md's first heading does not name \`${dir}\` — copied from another skill?`,
+      );
+    }
+  }
+
   // ── layout ──
-  if (!files.some((file) => file.startsWith("scripts/"))) {
+  const scripts = files.filter((file) => file.startsWith("scripts/"));
+  if (scripts.length === 0) {
     add("scripts-missing", "No `scripts/` file. The mechanical half of a skill is a script, not prose.");
+  } else {
+    // The body is what makes a script the skill's mechanical half rather than a
+    // file that happens to sit beside it. A skill whose prose runs nothing is
+    // the shape that passed every check here once: a directory, a description,
+    // and a script nobody invokes.
+    const references = scriptReferences(parsed.body);
+    const invoked = references.filter((reference) => reference.qualified);
+    if (invoked.length === 0) {
+      add(
+        "script-unreferenced",
+        "The body never runs a `<skill-dir>/scripts/…` file. A script the prose does not invoke is not the skill's mechanical half.",
+      );
+    }
+    for (const reference of invoked) {
+      if (!files.includes(reference.path)) {
+        // A rename `check-scripts.sh` cannot see: it parses the script that
+        // still exists and says nothing about the path the body still names.
+        add("script-not-found", `The body runs \`${reference.path}\`, which is not in this skill.`);
+      }
+    }
+    for (const reference of references) {
+      // Only a path that IS one of this skill's files: a body may perfectly well
+      // mention the *user's* `scripts/deploy.sh`, and that is prose about their
+      // repository rather than a broken reference to ours.
+      if (reference.relative && files.includes(reference.path)) {
+        add(
+          "script-path-relative",
+          `The body names \`${reference.path}\` relatively. A skill runs with the user's project as its working directory, so write \`<skill-dir>/${reference.path}\`.`,
+        );
+      }
+    }
   }
   if (files.some((file) => file.startsWith("assets/"))) {
     add(
@@ -563,7 +686,7 @@ const GALLERY_URL_RE = /^https:\/\/[^/\s]+\/skills\/[a-z0-9-]+\/[a-z0-9-]+$/;
  * remaining `null` into a failure.
  */
 export function lintGalleryLinks(root, skills) {
-  const at = (code, message) => [{ dir: GALLERY_LINKS_FILE, code, message }];
+  const at = (code, message) => [{ dir: GALLERY_LINKS_FILE, code, message, severity: "error" }];
   const path = join(root, GALLERY_LINKS_FILE);
   if (!isFile(path)) {
     return at("gallery-links-missing", `${GALLERY_LINKS_FILE} is missing.`);
@@ -618,6 +741,78 @@ export function lintGalleryLinks(root, skills) {
   return problems;
 }
 
+// ── the repository README ─────────────────────────────────────────────────
+
+export const REPO_README_FILE = "README.md";
+
+/** A Markdown link destination: the `(...)` half, without a title or whitespace. */
+const MARKDOWN_LINK_RE = /\]\(([^)\s]+)\)/g;
+
+/**
+ * Check the front page against the skills the repository actually holds.
+ *
+ * This is the count problem stated per skill instead of as a number. The README
+ * says "Nine skills", lists them in a table, and aggregates their results —
+ * every one of which goes stale the moment a tenth directory lands, with nothing
+ * failing. Pinning the number here would be the wrong shape: the repository is
+ * laid out as `<pack>/<skill>/` precisely so a second pack is additive, and a
+ * hard nine would have to be edited by whoever adds one.
+ *
+ * So the rule is membership in both directions, which is count-free and holds
+ * for any number of packs: every skill is linked from the README, and every
+ * README link into a pack points at a skill that exists. A contributor adding a
+ * skill has to add its row — and the prose they are editing around it is the
+ * prose that would otherwise have gone stale.
+ *
+ * **Link destinations only, never prose.** A README naming a path in a sentence
+ * is not claiming it exists; a link is.
+ *
+ * Pure, like `lintSkill`: `readme` is the file's contents or `null`.
+ */
+export function lintRepoReadme({ readme, packs, skills }) {
+  if (readme == null) {
+    return [
+      {
+        dir: REPO_README_FILE,
+        code: "repo-readme-missing",
+        message: `${REPO_README_FILE} is missing — it is the repository's front page and the list of what it holds.`,
+        severity: "error",
+      },
+    ];
+  }
+
+  const problems = [];
+  const targets = new Set(
+    [...readme.matchAll(MARKDOWN_LINK_RE)]
+      .map((match) => match[1].replace(/^\.\//, "").replace(/[#?].*$/, "").replace(/\/$/, ""))
+      .filter((target) => target !== ""),
+  );
+
+  for (const skill of skills) {
+    if (!targets.has(skill)) {
+      problems.push({
+        dir: skill,
+        code: "readme-skill-unlisted",
+        message: `${REPO_README_FILE} links no \`${skill}\`. A skill nobody lists is a skill nobody finds.`,
+        severity: "error",
+      });
+    }
+  }
+
+  for (const target of targets) {
+    const parts = target.split("/");
+    if (parts.length !== 2 || !packs.includes(parts[0]) || skills.includes(target)) continue;
+    problems.push({
+      dir: REPO_README_FILE,
+      code: "readme-link-dead",
+      message: `Links \`${target}\`, which is not a skill in this repository.`,
+      severity: "error",
+    });
+  }
+
+  return problems;
+}
+
 /** Lint every skill in every pack under `root`. */
 export function lintPack(root) {
   const packs = packDirs(root);
@@ -631,47 +826,80 @@ export function lintPack(root) {
         dir,
         code: "skill-outside-pack",
         message: `\`${dir}/\` holds a SKILL.md at the repository root. Skills live at <pack>/<skill>/.`,
+        severity: "error",
       });
     }
   }
 
   if (packs.length === 0) {
-    problems.push({ dir: ".", code: "pack-empty", message: `No pack directory found under ${root}.` });
+    problems.push({
+      dir: ".",
+      code: "pack-empty",
+      message: `No pack directory found under ${root}.`,
+      severity: "error",
+    });
     // Deliberately no early return. Returning here suppressed the gallery-links
     // check in exactly the case where it says the most useful thing — which
     // skills the mapping still lists that the repository no longer has.
   }
 
   const allSkills = [];
+  const packQualified = [];
   for (const pack of packs) {
     for (const skill of skillDirs(root, pack)) {
       allSkills.push(skill);
+      packQualified.push(`${pack}/${skill}`);
       const skillRoot = join(root, pack, skill);
       problems.push(
         ...lintSkill({
           dir: skill,
           skillMd: readFileSync(join(skillRoot, "SKILL.md"), "utf8"),
+          readme: isFile(skillRoot, "README.md")
+            ? readFileSync(join(skillRoot, "README.md"), "utf8")
+            : null,
           files: filesUnder(skillRoot),
         }).map((problem) => ({ ...problem, dir: `${pack}/${skill}` })),
       );
     }
   }
 
+  problems.push(
+    ...lintRepoReadme({
+      readme: isFile(root, REPO_README_FILE)
+        ? readFileSync(join(root, REPO_README_FILE), "utf8")
+        : null,
+      packs,
+      skills: packQualified,
+    }),
+  );
   problems.push(...lintGalleryLinks(root, allSkills));
   return problems;
 }
 
-/** Entry point. Returns the process exit code rather than calling `exit`. */
+/**
+ * Entry point. Returns the process exit code rather than calling `exit`.
+ *
+ * Warnings are printed and do not fail the build. There is exactly one today —
+ * `description-no-trigger`, for the reasons given where it is raised — and it is
+ * printed on every run rather than suppressed when the build passes, because a
+ * warning nobody sees is a rule that has been deleted with extra steps.
+ */
 export function runCli({ argv = [], cwd = process.cwd(), log = console.log, error = console.error } = {}) {
   const root = argv[0] ?? cwd;
   const problems = lintPack(root);
-  if (problems.length === 0) {
+  const warnings = problems.filter((problem) => problem.severity === "warning");
+  const errors = problems.filter((problem) => problem.severity !== "warning");
+
+  for (const problem of warnings) error(`${problem.dir}: [${problem.code}] warning: ${problem.message}`);
+
+  if (errors.length === 0) {
     const packs = packDirs(root);
     const skills = packs.reduce((n, pack) => n + skillDirs(root, pack).length, 0);
-    log(`Pack lint: ${skills} skill(s) across ${packs.length} pack(s) clean.`);
+    const noted = warnings.length === 0 ? "" : `, ${warnings.length} warning(s)`;
+    log(`Pack lint: ${skills} skill(s) across ${packs.length} pack(s) clean${noted}.`);
     return 0;
   }
-  for (const problem of problems) error(`${problem.dir}: [${problem.code}] ${problem.message}`);
-  error(`\nPack lint failed with ${problems.length} problem(s).`);
+  for (const problem of errors) error(`${problem.dir}: [${problem.code}] ${problem.message}`);
+  error(`\nPack lint failed with ${errors.length} problem(s).`);
   return 1;
 }
