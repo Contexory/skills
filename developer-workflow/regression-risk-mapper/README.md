@@ -2,7 +2,7 @@
 
 Maps what a change can reach — a change being considered as readily as one already made, since the question is usually asked before the edit exists. Finds the symbols involved, traces every call site and importer across the repository, and marks which of those call sites are exercised by a test and which are not. Use when the user asks what something might break, what depends on a symbol they are about to modify, rename or change the return type of, how far the blast radius of a refactor extends, or whether an edit is safe to make. Not for finding usages as an end in itself — with no change in prospect, that is a plain search and answering it with a risk analysis is more than was asked.
 
-**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory-m4td4h/regression-risk-mapper)** — rendered, with its supporting files.
+**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory/regression-risk-mapper)** — rendered, with its supporting files.
 
 - [`SKILL.md`](./SKILL.md) — the skill itself
 - [`scripts/`](./scripts) — the deterministic half

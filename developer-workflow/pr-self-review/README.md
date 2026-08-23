@@ -2,7 +2,7 @@
 
 Reviews your own diff before anyone else has to. Inventories every changed file, finds the ones that gained behaviour without gaining a test, flags newly exported surface, and separates what the diff claims to do from what it also did. Use when the user is about to push, open a pull request, or asks for a review of work they just finished.
 
-**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory-m4td4h/pr-self-review)** — rendered, with its supporting files.
+**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory/pr-self-review)** — rendered, with its supporting files.
 
 - [`SKILL.md`](./SKILL.md) — the skill itself
 - [`scripts/`](./scripts) — the deterministic half

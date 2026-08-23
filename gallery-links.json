@@ -2,14 +2,14 @@
   "$comment": "Skill -> public gallery URL. A gallery URL cannot be derived: `publicSlug` is allocated once, on a skill's first publish, and never re-derived, so it is a fact to record afterwards rather than compute in advance. `null` means not published yet. With `status` at \"published\", every remaining null is a lint failure (`gallery-link-pending`) so a placeholder cannot outlive the reason for it.",
   "status": "published",
   "links": {
-    "changeset-writer": "https://www.contexory.com/skills/contexory-m4td4h/changeset-writer",
-    "dependency-upgrade-auditor": "https://www.contexory.com/skills/contexory-m4td4h/dependency-upgrade-auditor",
-    "doc-drift-detector": "https://www.contexory.com/skills/contexory-m4td4h/doc-drift-detector",
-    "error-triage": "https://www.contexory.com/skills/contexory-m4td4h/error-triage",
-    "flaky-test-finder": "https://www.contexory.com/skills/contexory-m4td4h/flaky-test-finder",
-    "pr-self-review": "https://www.contexory.com/skills/contexory-m4td4h/pr-self-review",
-    "regression-risk-mapper": "https://www.contexory.com/skills/contexory-m4td4h/regression-risk-mapper",
-    "repo-onboarding-map": "https://www.contexory.com/skills/contexory-m4td4h/repo-onboarding-map",
-    "test-gap-finder": "https://www.contexory.com/skills/contexory-m4td4h/test-gap-finder"
+    "changeset-writer": "https://www.contexory.com/skills/contexory/changeset-writer",
+    "dependency-upgrade-auditor": "https://www.contexory.com/skills/contexory/dependency-upgrade-auditor",
+    "doc-drift-detector": "https://www.contexory.com/skills/contexory/doc-drift-detector",
+    "error-triage": "https://www.contexory.com/skills/contexory/error-triage",
+    "flaky-test-finder": "https://www.contexory.com/skills/contexory/flaky-test-finder",
+    "pr-self-review": "https://www.contexory.com/skills/contexory/pr-self-review",
+    "regression-risk-mapper": "https://www.contexory.com/skills/contexory/regression-risk-mapper",
+    "repo-onboarding-map": "https://www.contexory.com/skills/contexory/repo-onboarding-map",
+    "test-gap-finder": "https://www.contexory.com/skills/contexory/test-gap-finder"
   }
 }

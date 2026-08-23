@@ -2,7 +2,7 @@
 
 Produces the first-thirty-minutes map of a whole repository — how it is laid out, how to run and test it, which files carry the most change, and where the decisions were written down. Reads what the repository actually does rather than what its README claims. Use when the user needs to get oriented in an entire codebase they do not know — joining one, reviewing one they do not own, or asking how a project is structured and how to get it running. It is a survey, so it does not apply to a question about one part of a codebase — locating a single file, explaining one function, or asking how to carry out a specific change are each one lookup, and a whole-repository map is a disproportionate answer to them.
 
-**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory-m4td4h/repo-onboarding-map)** — rendered, with its supporting files.
+**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory/repo-onboarding-map)** — rendered, with its supporting files.
 
 - [`SKILL.md`](./SKILL.md) — the skill itself
 - [`scripts/`](./scripts) — the deterministic half
