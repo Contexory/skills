@@ -2,7 +2,7 @@
 
 Writes the release note for a change using the repository's own convention, and picks the version bump from what the change did to the public surface rather than from how big the diff looks. Detects Changesets, Conventional Commits or a hand-maintained changelog and follows whichever is already in use. Use when the user needs a changeset, release note, changelog entry or version bump decision for work they just finished.
 
-**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory-m4td4h/changeset-writer)** — rendered, with its supporting files.
+**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory/changeset-writer)** — rendered, with its supporting files.
 
 - [`SKILL.md`](./SKILL.md) — the skill itself
 - [`scripts/`](./scripts) — the deterministic half

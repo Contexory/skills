@@ -2,7 +2,7 @@
 
 Finds the untested code that actually matters, by ranking coverage gaps against how often each file changes. Reads an existing coverage report when there is one and falls back to structural pairing when there is not. Use when the user asks what to test next, where the coverage holes are, or wants to raise coverage without writing tests nobody needs.
 
-**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory-m4td4h/test-gap-finder)** — rendered, with its supporting files.
+**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory/test-gap-finder)** — rendered, with its supporting files.
 
 - [`SKILL.md`](./SKILL.md) — the skill itself
 - [`scripts/`](./scripts) — the deterministic half

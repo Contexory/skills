@@ -2,7 +2,7 @@
 
 Proves whether a test is flaky instead of reasoning about it, by re-running it many times and reporting the observed failure rate, then narrowing the cause to ordering, shared state, timing or environment. Use when a test fails intermittently, passes on retry, fails only in CI, or the user suspects flakiness.
 
-**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory-m4td4h/flaky-test-finder)** — rendered, with its supporting files.
+**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory/flaky-test-finder)** — rendered, with its supporting files.
 
 - [`SKILL.md`](./SKILL.md) — the skill itself
 - [`scripts/`](./scripts) — the deterministic half

@@ -2,7 +2,7 @@
 
 Checks a document's checkable claims against the code it describes — file paths that no longer exist, commands that are no longer defined, flags and symbols that have been renamed, version numbers that have moved on. Reports what is provably stale and stays quiet about prose. Use when the user asks whether docs are still accurate, suspects a README or guide is out of date, or is reviewing documentation against a codebase.
 
-**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory-m4td4h/doc-drift-detector)** — rendered, with its supporting files.
+**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory/doc-drift-detector)** — rendered, with its supporting files.
 
 - [`SKILL.md`](./SKILL.md) — the skill itself
 - [`scripts/`](./scripts) — the deterministic half

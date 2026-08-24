@@ -2,7 +2,7 @@
 
 Works out what a dependency upgrade actually breaks for you, by extracting the specific APIs your code imports from a package and reading the release notes against that list rather than in general. Use when the user is upgrading a package, evaluating whether a version bump is safe, or asks why something broke after a dependency changed.
 
-**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory-m4td4h/dependency-upgrade-auditor)** — rendered, with its supporting files.
+**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory/dependency-upgrade-auditor)** — rendered, with its supporting files.
 
 - [`SKILL.md`](./SKILL.md) — the skill itself
 - [`scripts/`](./scripts) — the deterministic half

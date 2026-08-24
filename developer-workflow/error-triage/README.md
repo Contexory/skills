@@ -2,7 +2,7 @@
 
 Locates the cause of a runtime failure inside this repository. Maps stack frames to real source files, separates first-party code from vendored frames, and surfaces the recent changes to the line that owns the failure. A pasted stack trace is the fastest input but not a requirement — it works from a CI or crash log, or from a failure the user only describes, in which case its first step is establishing what to capture. Use when something has already failed at runtime and the user wants to know why — a pasted exception, a job log, or a fault that appears in one environment and not another. Not for a failure the user describes as intermittent, where the rate has to be measured before anything can be diagnosed.
 
-**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory-m4td4h/error-triage)** — rendered, with its supporting files.
+**[This skill on the Contexory gallery](https://www.contexory.com/skills/contexory/error-triage)** — rendered, with its supporting files.
 
 - [`SKILL.md`](./SKILL.md) — the skill itself
 - [`scripts/`](./scripts) — the deterministic half
