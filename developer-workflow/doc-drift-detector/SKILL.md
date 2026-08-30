@@ -1,6 +1,10 @@
 ---
 name: doc-drift-detector
-description: Checks a document's checkable claims against the code it describes — file paths that no longer exist, commands that are no longer defined, flags and symbols that have been renamed, version numbers that have moved on. Reports what is provably stale and stays quiet about prose. Use when the user asks whether docs are still accurate, suspects a README or guide is out of date, or is reviewing documentation against a codebase.
+description: >-
+  Checks a document's checkable claims against the code it describes — file paths that no longer exist, commands that
+  are no longer defined, flags and symbols that have been renamed, version numbers that have moved on. Reports what is
+  provably stale and stays quiet about prose. Use when the user asks whether docs are still accurate, suspects a README
+  or guide is out of date, or is reviewing documentation against a codebase.
 allowed-tools: Read Grep Glob Bash(git log:*) Bash(python3:*)
 ---
 
