@@ -2,7 +2,7 @@
 """Inventory a diff so the author reviews the surprises rather than the summary.
 
 Deterministic half of self-review: what changed, what kind of file it is, and
-four flags that reliably mark the places authors miss. Whether a flag matters is
+five flags that reliably mark the places authors miss. Whether a flag matters is
 a judgement call and is left to the reader — the script never says "this is
 wrong", only "this is unusual, decide about it".
 
@@ -39,6 +39,11 @@ EXPORT_RE = re.compile(
     r"|func\s+[A-Z]"
     r"|public\s+(?:static\s+)?(?:class|interface|[A-Za-z<>\[\]]+\s+[A-Z]))"
 )
+# The declared name on an export line, so an edited export can be told from a new one.
+EXPORT_NAME_RE = re.compile(
+    r"\b(?:function\*?|const|let|var|class|type|interface|enum|fn|struct|trait|func)\s+([A-Za-z_$][\w$]*)"
+    r"|([A-Za-z_$][\w$]*)\s*[(<]"
+)
 # A removed line that was a test case.
 DEL_TEST_RE = re.compile(r"^-\s*(?:it|test|describe)\s*[(.]|^-\s*def test_|^-\s*func Test[A-Z]")
 
@@ -49,6 +54,8 @@ class FileChange:
     added: int = 0
     removed: int = 0
     new_exports: list[str] = field(default_factory=list)
+    changed_exports: list[str] = field(default_factory=list)
+    removed_export_names: set[str] = field(default_factory=set)
     deleted_tests: int = 0
     widest_hunk: int = 0
 
@@ -77,6 +84,11 @@ class FileChange:
         base = re.sub(r"\.(test|spec)(?=\.)", "", base)
         base = re.sub(r"^test_|_test$", "", os.path.splitext(base)[0])
         return base
+
+
+def export_name(line: str) -> str | None:
+    m = EXPORT_NAME_RE.search(line)
+    return next((g for g in m.groups() if g), None) if m else None
 
 
 def git(args: list[str]) -> str:
@@ -164,8 +176,17 @@ def collect(base: str) -> list[FileChange]:
             current.removed += 1
             if DEL_TEST_RE.search(line):
                 current.deleted_tests += 1
+            name = export_name(line[1:]) if EXPORT_RE.search("+" + line[1:]) else None
+            if name:
+                current.removed_export_names.add(name)
     if current:
         current.widest_hunk = max(current.widest_hunk, hunk_len)
+
+    for change in files.values():
+        if change.removed_export_names:
+            added = change.new_exports
+            change.changed_exports = [e for e in added if export_name(e) in change.removed_export_names]
+            change.new_exports = [e for e in added if e not in change.changed_exports]
 
     # `git diff` cannot see a file that was never added, so a brand-new module
     # sitting untracked in the working tree is invisible to it — which is
@@ -218,6 +239,8 @@ def main() -> int:
             flags.append("NO-TEST")
         if c.new_exports:
             flags.append("NEW-EXPORT")
+        if c.changed_exports:
+            flags.append("CHANGED-EXPORT")
         if c.deleted_tests:
             flags.append("DEL-TEST")
         if c.widest_hunk > WIDE_HUNK_LINES:
@@ -229,6 +252,8 @@ def main() -> int:
             flagged.append((c.path, " ".join(flags)))
         for e in c.new_exports[:5]:
             print(f"                · {e}")
+        for e in c.changed_exports[:5]:
+            print(f"                ~ {e}")
 
     print("\n── decisions required ──\n")
     if not flagged:

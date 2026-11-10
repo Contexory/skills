@@ -24,11 +24,13 @@ your project, so its script is named by full path, never relatively.
 ```
 python3 <skill-dir>/scripts/blast_radius.py             # working tree vs merge-base with main
 python3 <skill-dir>/scripts/blast_radius.py origin/main # or an explicit base
+python3 <skill-dir>/scripts/blast_radius.py --symbol renderInvoice   # before the edit exists
 ```
 
-For every symbol the diff modifies, the script finds every file referencing it, marks each
-reference `direct` or `re-export`, and marks whether the referencing file has a
-corresponding test file. It prints a per-symbol radius, ordered by number of call sites.
+For every symbol the diff modifies, or each one named with `--symbol`, the script finds every
+file referencing it, marks each reference `direct` or `re-export`, and marks whether the
+referencing file has a corresponding test file. It prints a per-symbol radius, ordered by
+number of call sites. By-name mode counts the definition itself as one of the references.
 
 **Read the caveat it prints.** The search is textual. It cannot see dynamic dispatch,
 string-keyed lookup, reflection, or a caller in another repository, and it says so — those

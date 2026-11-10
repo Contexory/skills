@@ -504,13 +504,138 @@ describe("lintSkill", () => {
     assert.deepEqual(codes(problems), ["allowed-tools-missing"]);
   });
 
-  it("fails a malformed allowed-tools token", () => {
+  it("warns about a malformed allowed-tools token", () => {
     const problems = lintSkill(
       skill({ skillMd: reframe("allowed-tools:", "allowed-tools: Read Bash(git log:*) bash(x)") }),
     );
     const bad = problems.find((p) => p.code === "allowed-tools-bad-token");
     assert.ok(bad);
     assert.match(bad.message, /bash\(x\)/);
+  });
+
+  it("reports a malformed token as a WARNING, so it cannot fail a pull request", () => {
+    // Every other test here filters by `code`, so a severity flip is invisible
+    // to all of them.
+    const problems = lintSkill(
+      skill({ skillMd: reframe("allowed-tools:", "allowed-tools: Bash(git log:*) bash(x)") }),
+    );
+    const bad = problems.find((p) => p.code === "allowed-tools-bad-token");
+    assert.equal(bad.severity, "warning");
+  });
+
+  it("still errors on the rules that are ours to make, not the spec's", () => {
+    const missing = lintSkill(skill({ skillMd: reframe("allowed-tools:", null) }));
+    assert.equal(
+      missing.find((p) => p.code === "allowed-tools-missing").severity,
+      "error",
+    );
+    const scopeless = lintSkill(
+      skill({ skillMd: reframe("allowed-tools:", "allowed-tools: Read Grep") }),
+    );
+    assert.equal(
+      scopeless.find((p) => p.code === "allowed-tools-no-multiword-scope").severity,
+      "error",
+    );
+  });
+
+  it("exits 0 for a skill whose only problem is a token spelling", () => {
+    const out = [];
+    const err = [];
+    const root = fixtureTree({
+      ...GOOD_TREE,
+      "developer-workflow/error-triage/SKILL.md": GOOD_SKILL_MD.replace(
+        /^allowed-tools:.*$/m,
+        "allowed-tools: Bash(git log:*) bash(x)",
+      ),
+    });
+    const code = runCli({
+      argv: [root],
+      cwd: "/nowhere",
+      log: (m) => out.push(m),
+      error: (m) => err.push(m),
+    });
+    assert.equal(code, 0);
+    // Printed, not merely downgraded.
+    assert.match(err.join("\n"), /allowed-tools-bad-token/);
+    assert.match(err.join("\n"), /bash\(x\)/);
+    assert.match(out.join("\n"), /1 warning/);
+  });
+
+  /**
+   * MCP names, valid and near-miss. These live here rather than only upstream:
+   * the corpus binding the two copies of the grammar is in a private monorepo,
+   * so without them a narrowed regex leaves this suite green and this linter
+   * silently disagreeing with the product.
+   */
+  const MCP_VALID = [
+    "mcp__github__create_issue",
+    "mcp__puppeteer__puppeteer_navigate",
+    "mcp__github", // a whole server: every tool it exposes
+    "mcp__claude_ai_Ahrefs__authenticate", // server names carry capitals…
+    "mcp__my-server__do_thing", // …and hyphens
+    "mcp__server2__tool3", // …and digits
+  ];
+  const MCP_INVALID = [
+    "mcp__", // prefix with no name
+    "mcp____tool", // empty server segment
+    "mcp__github__", // trailing separator
+    "MCP__github__create_issue", // the prefix is lowercase, always
+    "mcp_github_create_issue", // single underscores are not the prefix
+    "mcp__a-", // must end alphanumeric
+  ];
+
+  for (const token of MCP_VALID) {
+    it(`accepts the MCP tool name ${token}`, () => {
+      const problems = lintSkill(
+        skill({
+          skillMd: reframe(
+            "allowed-tools:",
+            `allowed-tools: Bash(git log:*) ${token}`,
+          ),
+        }),
+      );
+      assert.deepEqual(
+        problems.filter((p) => p.code === "allowed-tools-bad-token"),
+        [],
+      );
+    });
+  }
+
+  for (const token of MCP_INVALID) {
+    it(`rejects the near-miss ${token}`, () => {
+      const problems = lintSkill(
+        skill({
+          skillMd: reframe(
+            "allowed-tools:",
+            `allowed-tools: Bash(git log:*) ${token}`,
+          ),
+        }),
+      );
+      const bad = problems.find((p) => p.code === "allowed-tools-bad-token");
+      assert.ok(bad, `${token} should not validate`);
+      assert.ok(bad.message.includes(token));
+    });
+  }
+
+  it("accepts an MCP tool name written in the sequence form", () => {
+    const problems = lintSkill(
+      skill({
+        skillMd: reframe(
+          "allowed-tools:",
+          'allowed-tools: [Read, "Bash(git log:*)", mcp__github__create_issue]',
+        ),
+      }),
+    );
+    assert.deepEqual(codes(problems), []);
+  });
+
+  it("does not let an MCP name satisfy the multi-word-scope rule", () => {
+    const problems = lintSkill(
+      skill({
+        skillMd: reframe("allowed-tools:", "allowed-tools: Read mcp__github__create_issue"),
+      }),
+    );
+    assert.ok(problems.some((p) => p.code === "allowed-tools-no-multiword-scope"));
   });
 
   it("does NOT report the halves of a space-bearing scope as malformed", () => {

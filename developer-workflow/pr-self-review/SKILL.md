@@ -27,10 +27,11 @@ python3 <skill-dir>/scripts/review_surface.py origin/dev # or an explicit base
 ```
 
 The script prints every changed file with its classification (source, test, config, docs,
-generated, lockfile), the added/removed line counts, and four flags per file:
+generated, lockfile), the added/removed line counts, and five flags per file:
 
 - `NO-TEST` — a source file changed and no test file for it changed in the same diff
 - `NEW-EXPORT` — the diff adds an exported symbol
+- `CHANGED-EXPORT` — the diff edits the declaration line of an existing export; check its importers
 - `DEL-TEST` — the diff removes test cases
 - `WIDE` — a hunk over 200 lines, which almost always contains a second change
 
@@ -49,6 +50,8 @@ Anything else is the gap the reviewer will find.
 A new export is a promise to everyone who imports it. Ask whether it needs to be exported
 at all — most do not — and whether its name will still be right in six months. This is the
 cheapest moment in the change's life to narrow it.
+
+For each `CHANGED-EXPORT`, run `blast_radius.py --symbol <name>` from the `regression-risk-mapper` skill and check each importer still holds.
 
 ### 4. Split the diff in your head
 
@@ -69,7 +72,8 @@ A short report, in this order:
 
 1. **What this change is for** — one sentence
 2. **Untested behaviour** — the `NO-TEST` files with a decision each, or "none"
-3. **New public surface** — the `NEW-EXPORT` list with a keep/narrow call each
+3. **New public surface** — the `NEW-EXPORT` list with a keep/narrow call each, and the
+   importers of each `CHANGED-EXPORT` that need updating, or "none"
 4. **Also in this diff** — the hunks that are not the stated purpose
 5. **Look here hardest** — the two or three places a reviewer should spend their attention
 

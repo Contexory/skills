@@ -7,6 +7,7 @@ actually depends on the changed *behaviour* is a reading task, and the script
 says so rather than implying its list is a risk assessment.
 
     python3 blast_radius.py [base-ref]
+    python3 blast_radius.py --symbol NAME[,NAME...]   # before the edit exists
 
 Textual search, with the blind spots that implies — dynamic dispatch, string-keyed
 lookup, reflection and consumers in other repositories are invisible here, and the
@@ -183,11 +184,33 @@ def has_paired_test(rel: str, all_files: set[str]) -> bool:
     )
 
 
+def symbol_arg(argv: list[str]) -> list[str] | None:
+    """Names from `--symbol a,b` or `--symbol=a,b`, or None when not given."""
+    for i, arg in enumerate(argv):
+        if arg == "--symbol":
+            value = argv[i + 1] if i + 1 < len(argv) else ""
+        elif arg.startswith("--symbol="):
+            value = arg.split("=", 1)[1]
+        else:
+            continue
+        return [n for n in (s.strip() for s in value.split(",")) if n]
+    return None
+
+
 def main() -> int:
-    base = sys.argv[1] if len(sys.argv) > 1 else default_base()
+    by_name = symbol_arg(sys.argv[1:])
     root = git(["rev-parse", "--show-toplevel"]).strip() or os.getcwd()
     os.chdir(root)
 
+    if by_name is not None:
+        if not by_name:
+            print("usage: blast_radius.py --symbol NAME[,NAME...]", file=sys.stderr)
+            return 2
+        symbols = set(by_name)
+        print(f"{len(symbols)} symbol(s) by name: {', '.join(sorted(symbols))}\n")
+        return report_radius(root, symbols, set(), "")
+
+    base = sys.argv[1] if len(sys.argv) > 1 else default_base()
     defined, touched = changed_symbols(base)
 
     # Apply the second gate only where the language needs it, and only once the
@@ -214,12 +237,15 @@ def main() -> int:
         print(
             "No changed symbol definitions found in this diff.\n"
             "The change may be behaviour-only inside existing functions — in which case "
-            "map the radius of the enclosing function by name instead."
+            "map the radius of the enclosing function by name instead (--symbol NAME)."
         )
         return 0
 
     print(f"{len(symbols)} changed symbol(s): {', '.join(sorted(symbols))}\n")
+    return report_radius(root, symbols, touched, " outside the diff")
 
+
+def report_radius(root: str, symbols: set[str], touched: set[str], scope: str) -> int:
     sources = walk_sources(root)
     all_files = set(sources)
     radius: dict[str, list[tuple[str, int, str]]] = defaultdict(list)
@@ -241,9 +267,9 @@ def main() -> int:
 
     for sym in sorted(symbols, key=lambda s: -len(radius[s])):
         sites = radius[sym]
-        print(f"── {sym}: {len(sites)} reference(s) outside the diff ──")
+        print(f"── {sym}: {len(sites)} reference(s){scope} ──")
         if not sites:
-            print("   none. Nothing outside this diff names it.\n")
+            print(f"   none. Nothing{scope} names it.\n")
             continue
         if len(sites) > NOISE_THRESHOLD:
             print(

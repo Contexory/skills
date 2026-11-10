@@ -65,8 +65,8 @@ def default_base() -> str:
 def owning_package(root: str, rel: str) -> tuple[str, str, bool]:
     """(package dir, package name, published) for the file's nearest manifest."""
     parts = rel.split("/")
-    for i in range(len(parts) - 1, 0, -1):
-        candidate = "/".join(parts[:i])
+    for i in range(len(parts) - 1, -1, -1):
+        candidate = "/".join(parts[:i]) or "."
         manifest = os.path.join(root, candidate, "package.json")
         if os.path.isfile(manifest):
             try:

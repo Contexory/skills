@@ -1,30 +1,48 @@
-# Nine skills tested for when they should *not* fire
+# Nine skills, tested for when they should *not* fire
 
-Agent skills for Claude Code and compatible hosts. Nine of them, for the things
-developers actually reach for — triage a failure, review your own diff, find the
-untested branch, work out what an upgrade breaks.
-
-There are a lot of skill packs. The difference here is not the ideas, which are
-mostly the same ideas everyone else had. It is that **every skill here has been
-run against the prompts it should fire on _and_ the prompts it should stay out
-of**, with the other eight competing for the same prompt.
-
-That matters because of the way skills fail. The mechanism is over-triggering: a
+**A skill description tells you when a skill should fire. Nothing tells you when
+it should stay quiet — and that is the failure mode that actually costs you.** A
 skill that fires on everything adjacent to its topic is a tax on every unrelated
-turn, and you cannot see that from a description — a description is written by
-someone who wants their skill to be used.
+turn, and you cannot see it coming from a description, because a description is
+written by someone who wants their skill to be used. The only thing that reveals
+it is running the skill against the prompts it must *not* answer.
 
-We know because we measured it on this pack, and it was bad.
-`repo-onboarding-map` answered "where is the login form component?" — a question
-about one file — with a whole-repository survey, often enough that narrowing one
-sentence of its description was worth doing. It has not gone away entirely.
-Reading the description would never have caught it; only the negative cases did.
+**So every skill here is measured on its own fire cases _and_ its own skip cases, and the
+results are published — including the ones that go against us.** That is the
+claim, and it is a claim about evidence rather than about ideas: 90 cases, 270
+verdicts, [the numbers below](#the-results).
+
+We know the failure first-hand, because we measured it here and it was bad. On
+the five prompts `repo-onboarding-map` is supposed to stay quiet for — a
+single-symbol question, a file lookup ("where is the login form component?"), a
+how-do-I, a does-this-still-work, and a what-changed-last-week — it answered
+with a whole-repository survey on **8 of 15 verdicts** (three runs each).
+Narrowing one sentence of its description took that to 5 of 15. It still has the
+weakest skip score in the pack, and it is still in
+[the results table](#the-results) at that number rather than quietly dropped.
+Reading the description would never have caught any of that; only the negative
+cases did.
+
+Three things follow, and the third is what makes the first two usable:
+
+- **Every skill is measured on fire _and_ skip cases, and the results are
+  published** — [below](#the-results), at whatever they came out at. The cases
+  themselves are not in this repository and are not public anywhere; that
+  limitation gets its own section,
+  [The evidence, and where it is](#the-evidence-and-where-it-is), and it is a
+  real one.
+- **Where a skill has no measured result yet, this page says so** rather than
+  leaving the gap for you to notice. Output quality is the standing example:
+  nothing here measures whether a skill, once fired, does good work.
+- **Every skill is useful with zero Contexory dependency.** No account, no
+  plugin, no sign-up. `git clone` is a supported install path and the skills do
+  not know the difference.
 
 So the negative cases are the product. **They are not in this repository, and
 they are not public anywhere else either** — that is the first thing to know
 about the numbers below, and it is stated here rather than further down because
 it changes how much weight they can carry. They are authored and re-run in
-[Contexory](https://contexory.com), against a live dispatcher with every sibling
+[Contexory](https://www.contexory.com), against a live dispatcher with every sibling
 skill offered alongside — which is the only setting in which over-triggering
 appears at all, and not a thing a Markdown table in a git repository can
 demonstrate. They are not shipped here because they are test cases: they are not
@@ -47,17 +65,70 @@ figure in this README.
 | [`changeset-writer`](./developer-workflow/changeset-writer) | Detects the repository's own release convention and picks the bump from what changed in the public surface |
 | [`doc-drift-detector`](./developer-workflow/doc-drift-detector) | Checks a document's *checkable* claims — paths, commands, flags, versions — and stays quiet about prose |
 
+## What we have measured, and what we have not
+
+Two results, and an explicit gap. Both results are our own, run against our own
+code — which is the only kind of evidence this repository is in a position to
+publish, and the reason the numbers below are stated with their conditions
+attached rather than as headlines.
+
+### Precision, measured on our own repository
+
+`doc-drift-detector` extracts a document's *checkable* claims — paths, commands,
+flags, versions — and reports the ones that no longer hold. Pointed at
+`AGENTS.md`, the 481-claim engineering guide this pack was authored under, the
+first working version of the extractor and the shipped version disagree by two
+orders of magnitude:
+
+| | Claims checked | Reported stale | Survived review |
+| :--- | ---: | ---: | ---: |
+| First version of the extractor | 481 | **158** | 1 |
+| Shipped version | 481 | **1** | 1 |
+
+Every one of the 157 that went away was a false positive: module specifiers, path
+aliases, lint-rule ids, member expressions like `t.rich`, and paths belonging to
+dependencies. The single finding that survives both is real — a source path in a
+passage explaining why a lint rule never ran, which genuinely no longer exists
+and which a reader keeps on purpose, as history. The tool's job there was to
+surface one checkable claim, not to decide the tense.
+
+**That ratio is the product.** A tool reporting 158 problems where there is one
+is not a tool with a tuning issue, it is a tool nobody runs twice — which is why
+`doc-drift-detector` asks to be judged on **precision** rather than on how much
+it finds, and why every skill here states what it deliberately will not flag.
+
+### Triggering, measured across all nine at once
+
+The other result is [the trigger-test numbers](#the-results) — 244 of 270
+verdicts, per skill, with the weak rows left in. Read
+[the method](#the-method) before the total: the cases are run in **workspace
+mode**, all nine skills competing for every prompt, which is the only setting in
+which over-triggering appears at all and is a harder test than measuring a skill
+on its own.
+
+### What is not measured
+
+Stated here rather than left for you to discover:
+
+- **Output quality.** Nothing in this repository measures whether a skill, once
+  fired, does useful work. Triggering and usefulness are different questions and
+  we have published evidence on one of them.
+- **Anything outside TypeScript/JavaScript.** The skills detect the surrounding
+  ecosystem and degrade rather than fail, and that degradation was checked — but
+  the proof runs are against Node/TypeScript repositories.
+- **More than one repository.** Both results above come from the codebase this
+  pack was written in. That is a real limit on how far they generalize, and the
+  honest way to test it is to install one skill and watch what it does in yours.
+
 ## Install
 
 ```bash
 npx skills add Contexory/skills
 ```
 
-That is the [`skills` CLI](https://github.com/vercel-labs/skills) — the one
-[skills.sh](https://skills.sh) documents, and the line
-[vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) and
-[gitshot](https://github.com/vipulgupta2048/gitshot) publish for their own
-skills. It clones this repository, finds all nine, and asks which you want;
+That is the [`skills` CLI](https://github.com/vercel-labs/skills), documented at
+[skills.sh](https://skills.sh) — the installer this line invokes, not something
+we publish. It clones this repository, finds all nine, and asks which you want;
 inside an agent session it skips the question and takes all nine. To pick one
 either way:
 
@@ -130,7 +201,7 @@ Two different things, and the difference is what each one does after you install
 it. **This repository is nine fixed skills.** You install them, the copies are
 yours, and they change when you install again.
 
-The [Contexory](https://contexory.com) plugin for Claude Code is not these nine
+The [Contexory](https://www.contexory.com) plugin for Claude Code is not these nine
 at all — it syncs *your own* workspace's skills into Claude Code and keeps them
 current as your team publishes new versions:
 
@@ -142,6 +213,22 @@ current as your team publishes new versions:
 It manages its own directory rather than `~/.claude/skills`, so it neither
 installs these nine nor disturbs them if you have. Nothing in this repository
 requires it, and installing it does not get you this pack.
+
+### The optional path, if a copy stops being enough
+
+A skill you copy is yours and it is frozen — which is the right trade for nine
+fixed skills, and the wrong one for a skill your team keeps changing. The problem
+that shows up later is drift: the same skill pasted into three repositories
+becomes three skills, and the one you fix is not the one your colleague is
+running.
+
+Contexory's answer is **two-way GitHub sync** — the skills live in a repository
+you own, edits go either way, and a release is a versioned thing you can roll
+back. It is written up at
+[Keeping skills current across a team](https://www.contexory.com/docs/reference/keeping-skills-current),
+and it is genuinely optional: nothing on this page depends on it, none of the
+nine reference it, and if you never open that link the pack works exactly as
+described above.
 
 ## Layout
 
@@ -156,9 +243,9 @@ tools/                         # the lint, and the lint's own tests
 ```
 
 **A skill directory holds only what the skill uses.** Its trigger tests live in
-Contexory ([why](#the-evidence-and-where-it-is)), and so does our positioning
-against anyone else's skill. Installing one of these should put a tool on your
-machine, not files you have to work out whether to delete.
+Contexory ([why](#the-evidence-and-where-it-is)), and nothing about how we
+evaluate the pack ships beside the skill either. Installing one of these should
+put a tool on your machine, not files you have to work out whether to delete.
 
 **Skills sit under a pack directory, never at the root.** This repository is
 named for what it holds rather than for one pack's topic, so a second pack is a
@@ -180,7 +267,7 @@ builtins only, no lockfile, nothing to audit. It fails on:
 | | |
 | :--- | :--- |
 | **Frontmatter** | missing `name` or `description`; a `name` that does not match its directory; a description over 1024 characters |
-| **`allowed-tools`** | a malformed token; no token whose scope contains a space |
+| **`allowed-tools`** | no tokens at all; no token whose scope contains a space |
 | **Files** | no `scripts/` file; no `README.md`; a `README.md` whose first heading names a different skill; an `assets/` file present |
 | **The body** | it runs no `<skill-dir>/scripts/…` file; it runs one that is not there; it writes a script path relatively |
 | **Layout** | a skill sitting at the repository root instead of inside a pack |
@@ -220,13 +307,14 @@ was renamed (the script that remains parses fine too).
 
 ### What CI warns about, without failing
 
-One rule, and it is a warning on purpose:
+Two rules, and each is a warning on purpose:
 
 | | |
 | :--- | :--- |
 | `description-no-trigger` | the description contains none of `use this skill`, `when the user`, `for tasks involving`, `use when` |
+| `allowed-tools-bad-token` | an `allowed-tools` token matches no spelling a known host accepts; the specification defines no grammar for the field, so failing on it would assert a rule of our own |
 
-That is a **literal substring list**, printed on every run and never a build
+`description-no-trigger` is a **literal substring list**, printed on every run and never a build
 failure. The four phrases are written out here because the check cannot do what
 its name claims: "Use this when a stack trace is pasted" states its trigger
 exactly and matches none of them. Contexory's own validator returns this at
@@ -259,6 +347,12 @@ So this repository's linter is tokenizer-based, its
 and every skill here declares at least one multi-word scope — which makes the
 pack itself a standing fixture for the bug.
 
+The full write-up of the field — what a token may legally contain, both spellings,
+and how the split goes wrong — is
+[allowed-tools in a SKILL.md](https://www.contexory.com/docs/reference/allowed-tools).
+There is a [plain-text copy](https://www.contexory.com/docs/reference/allowed-tools.md)
+of that page if you would rather hand it to an agent than read it.
+
 Both spellings of the field are accepted, because both are real:
 
 ```yaml
@@ -272,13 +366,37 @@ tools, every derived surface disagrees, and nothing raises an error. A linter
 that rejected it would be wrong about documented input, so this one reads both
 and tokenizes each entry.
 
+And both *name* forms are accepted, for the same reason. A built-in tool is
+written in PascalCase; an **MCP** tool is written `mcp__server__tool`, with a
+double underscore between the server and the tool it exposes:
+
+```yaml
+allowed-tools: Read Bash(git log:*) mcp__github__create_issue
+allowed-tools: Read mcp__github          # the whole server, every tool on it
+```
+
+The server segment is whatever the operator named their server, so it may carry
+capitals, digits and hyphens — `mcp__Ahrefs__search` and `mcp__my-server__do_thing`
+are both fine, and only the `mcp__` prefix itself is always lowercase. What does
+*not* validate is a name with nothing after the prefix (`mcp__`), an empty
+segment (`mcp____tool`), or a trailing separator (`mcp__github__`).
+
+This is a third instance of the same story, and it is the one that lasted
+longest: the grammar behind the tokenizer was PascalCase-only, so a skill
+allowing an MCP tool — the form Claude Code's own permissions documentation
+teaches — was reported as malformed by a linter whose entire pitch is reading
+this field correctly. The tokenizer was never wrong about it; the shape test
+after it was. [`tools/lint.test.mjs`](./tools/lint.test.mjs) pins both the
+accepted spellings and the near-misses, so narrowing the grammar back fails
+here rather than in someone's pull request.
+
 ## The evidence, and where it is
 
 **Every number below is a claim you cannot currently check, and that is the most
 important sentence in this README.**
 
 The per-case evidence — each prompt, each verdict it drew, and the dispatcher's
-own stated reasoning — is recorded in [Contexory](https://contexory.com), which
+own stated reasoning — is recorded in [Contexory](https://www.contexory.com), which
 is where these cases are authored and where they are re-run whenever a
 description changes. It sits in the private workspace that owns these skills.
 
@@ -462,5 +580,5 @@ out of the workflow; they are single-line on purpose.
 
 ## License
 
-[MIT](./LICENSE). Built by [Contexory](https://contexory.com), which is where
+[MIT](./LICENSE). Built by [Contexory](https://www.contexory.com), which is where
 these were authored, versioned and tested.

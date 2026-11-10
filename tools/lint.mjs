@@ -44,10 +44,20 @@ import { join } from "node:path";
  */
 const ALLOWED_TOOL_TOKEN_RE = /[^\s()]+\([^)]*\)|\S+/g;
 
-/** The shape a single token must have once the field is tokenized correctly. */
-const ALLOWED_TOOL_RE = /^[A-Z][A-Za-z0-9]*(?:\([^)]+\))?$/;
+/**
+ * The shape a single token must have. Two name forms: a PascalCase built-in, and
+ * an MCP tool `mcp__<server>[__<tool>]`. This is a *second statement* of the
+ * product's pattern (see the header) — narrowing it here without narrowing there
+ * red-builds a contributor over a token the product accepts.
+ */
+const ALLOWED_TOOL_RE =
+  /^(?:[A-Z][A-Za-z0-9]*|mcp__[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?)(?:\([^)]+\))?$/;
 
-/** A scope carrying whitespace — the token shape the naive split destroys. */
+/**
+ * A scope carrying whitespace — the token shape the naive split destroys.
+ * Built-in form only: an MCP name carries no scope, so widening this would let a
+ * skill satisfy the "runs a real scoped command" convention without one.
+ */
 const MULTIWORD_SCOPE_RE = /^[A-Z][A-Za-z0-9]*\([^)]*\s[^)]*\)$/;
 
 const SKILL_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -519,9 +529,12 @@ export function lintSkill({ dir, skillMd, readme, files }) {
   } else {
     for (const token of tokens) {
       if (!ALLOWED_TOOL_RE.test(token)) {
+        // A warning, matching the product: the specification defines no grammar
+        // for this field, so failing a pull request here asserts our own rule.
         add(
           "allowed-tools-bad-token",
-          `Invalid \`allowed-tools\` token ${JSON.stringify(token)}. Expected \`Read\` or \`Bash(git log:*)\`.`,
+          `\`allowed-tools\` token ${JSON.stringify(token)} doesn't match a spelling any host we know of accepts — check it against your agent. Known-good forms: \`Read\`, \`Bash(git log:*)\`, \`mcp__github__create_issue\`.`,
+          "warning",
         );
       }
     }

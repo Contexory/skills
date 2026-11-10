@@ -1,10 +1,6 @@
 ---
 name: doc-drift-detector
-description: >-
-  Checks a document's checkable claims against the code it describes — file paths that no longer exist, commands that
-  are no longer defined, flags and symbols that have been renamed, version numbers that have moved on. Reports what is
-  provably stale and stays quiet about prose. Use when the user asks whether docs are still accurate, suspects a README
-  or guide is out of date, or is reviewing documentation against a codebase.
+description: Checks a document's checkable claims against the code it describes — file paths that no longer exist, commands that are no longer defined, flags and symbols that have been renamed, version numbers that have moved on. Reports what is provably stale and stays quiet about prose. Use when the user asks whether docs are still accurate, suspects a README or guide is out of date, or is reviewing documentation against a codebase.
 allowed-tools: Read Grep Glob Bash(git log:*) Bash(python3:*)
 ---
 
@@ -43,7 +39,7 @@ It prints each claim as `OK`, `STALE`, or `UNCHECKABLE`, with the line number.
 
 ### 2. Discard the false positives before reporting anything
 
-The extractor is deliberately eager, so the third category needs a human pass. Common
+The extractor errs toward reporting, so `STALE` results need a human pass. Common
 legitimate `STALE` results that are not drift:
 
 - an illustrative path in an example that was never meant to exist (`src/your-app/index.ts`)
